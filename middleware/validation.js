@@ -89,42 +89,156 @@ const semanticSearchSchemas = {
 // Create semantic search entry validation
 const createSemanticSearchSchema = Joi.object({
   user_id: Joi.string().uuid().required(),
-  content_type: semanticSearchSchemas.contentType,
-  title: Joi.string().max(500).required(),
-  content: Joi.string().max(10000).required(),
-  primary_embedding: semanticSearchSchemas.primaryEmbedding,
-  tags: Joi.array().items(Joi.string().max(100)).max(20).default([]),
-  linked_entities: semanticSearchSchemas.linkedEntities,
-  feature_vector: semanticSearchSchemas.featureVector,
-  temporal_features: semanticSearchSchemas.temporalFeatures,
-  emotional_features: semanticSearchSchemas.emotionalFeatures,
-  semantic_features: semanticSearchSchemas.semanticFeatures,
-  user_features: semanticSearchSchemas.userFeatures,
-  search_metadata: semanticSearchSchemas.searchMetadata
+  entry_id: Joi.string().uuid().required(),
+  content_type: Joi.string().max(10000).required(),
+  message_type: Joi.string().optional(),
+  title: Joi.string().max(1000).required(),
+  content: Joi.string().required(),
+  session_id: Joi.string().uuid().required(),
+  conversation_context: Joi.string().max(1000).optional(),
+  primary_embedding: Joi.array().items(Joi.number().required()).length(768).required(),
+  created_at: Joi.string().required(),
+  updated_at: Joi.string().required(),
+  lightweight_embedding: Joi.array().items(Joi.number().required()).length(384).optional(),
+  text_length: Joi.number().integer().min(0).optional(),
+  processing_time_ms: Joi.number().min(0).optional(),
+  model_version: Joi.string().optional(),
+  tags: Joi.array().items(Joi.string().max(100)).max(20).required(),
+  emotion_context: Joi.object({
+    dominant_emotion: Joi.string().optional(),
+    intensity: Joi.number().min(0).max(1).optional(),
+    emotions: Joi.object({
+      joy: Joi.number().min(0).max(1).optional(),
+      sadness: Joi.number().min(0).max(1).optional(),
+      anger: Joi.number().min(0).max(1).optional(),
+      fear: Joi.number().min(0).max(1).optional(),
+      surprise: Joi.number().min(0).max(1).optional(),
+      disgust: Joi.number().min(0).max(1).optional(),
+      anticipation: Joi.number().min(0).max(1).optional(),
+      trust: Joi.number().min(0).max(1).optional()
+    }).optional()
+  }).optional(),
+  linked_entities: Joi.object({
+    people: Joi.array().items(Joi.string()).required(),
+    locations: Joi.array().items(Joi.string()).required(),
+    events: Joi.array().items(Joi.string()).required(),
+    topics: Joi.array().items(Joi.string()).required()
+  }).required(),
+  temporal_context: Joi.object({
+    hour_of_day: Joi.number().integer().min(0).max(23).optional(),
+    day_of_week: Joi.number().integer().min(0).max(6).optional(),
+    is_weekend: Joi.boolean().optional()
+  }).optional(),
+  search_metadata: Joi.object({
+    boost_factor: Joi.number().min(0).required(),
+    recency_weight: Joi.number().min(0).required(),
+    user_preference_alignment: Joi.number().min(0).required()
+  }).optional()
 });
 
-// Update semantic search entry validation
+// Update semantic search entry validation - now requires ALL fields like create (complete replacement)
 const updateSemanticSearchSchema = Joi.object({
-  title: Joi.string().max(500).optional(),
-  content: Joi.string().max(10000).optional(),
-  primary_embedding: semanticSearchSchemas.primaryEmbedding.optional(),
+  user_id: Joi.string().uuid().required(),
+  entry_id: Joi.string().uuid().required(),
+  content_type: Joi.string().max(10000).required(),
+  message_type: Joi.string().optional(),
+  title: Joi.string().max(1000).required(),
+  content: Joi.string().required(),
+  session_id: Joi.string().uuid().required(),
+  conversation_context: Joi.string().max(1000).optional(),
+  primary_embedding: Joi.array().items(Joi.number().required()).length(768).required(),
+  created_at: Joi.string().required(),
+  updated_at: Joi.string().required(),
+  lightweight_embedding: Joi.array().items(Joi.number().required()).length(384).optional(),
+  text_length: Joi.number().integer().min(0).optional(),
+  processing_time_ms: Joi.number().min(0).optional(),
+  model_version: Joi.string().optional(),
+  tags: Joi.array().items(Joi.string().max(100)).max(20).required(),
+  emotion_context: Joi.object({
+    dominant_emotion: Joi.string().optional(),
+    intensity: Joi.number().min(0).max(1).optional(),
+    emotions: Joi.object({
+      joy: Joi.number().min(0).max(1).optional(),
+      sadness: Joi.number().min(0).max(1).optional(),
+      anger: Joi.number().min(0).max(1).optional(),
+      fear: Joi.number().min(0).max(1).optional(),
+      surprise: Joi.number().min(0).max(1).optional(),
+      disgust: Joi.number().min(0).max(1).optional(),
+      anticipation: Joi.number().min(0).max(1).optional(),
+      trust: Joi.number().min(0).max(1).optional()
+    }).optional()
+  }).optional(),
+  linked_entities: Joi.object({
+    people: Joi.array().items(Joi.string()).required(),
+    locations: Joi.array().items(Joi.string()).required(),
+    events: Joi.array().items(Joi.string()).required(),
+    topics: Joi.array().items(Joi.string()).required()
+  }).required(),
+  temporal_context: Joi.object({
+    hour_of_day: Joi.number().integer().min(0).max(23).optional(),
+    day_of_week: Joi.number().integer().min(0).max(6).optional(),
+    is_weekend: Joi.boolean().optional()
+  }).optional(),
+  search_metadata: Joi.object({
+    boost_factor: Joi.number().min(0).required(),
+    recency_weight: Joi.number().min(0).required(),
+    user_preference_alignment: Joi.number().min(0).required()
+  }).optional()
+});
+
+// Partial update semantic search entry validation (for PATCH operations)
+const partialUpdateSemanticSearchSchema = Joi.object({
+  user_id: Joi.string().uuid().optional(),
+  entry_id: Joi.string().uuid().optional(),
+  content_type: Joi.string().max(10000).optional(),
+  message_type: Joi.string().optional(),
+  title: Joi.string().max(1000).optional(),
+  content: Joi.string().optional(),
+  session_id: Joi.string().uuid().optional(),
+  conversation_context: Joi.string().max(1000).optional(),
+  primary_embedding: Joi.array().items(Joi.number().required()).length(768).optional(),
+  lightweight_embedding: Joi.array().items(Joi.number().required()).length(384).optional(),
+  text_length: Joi.number().integer().min(0).optional(),
+  processing_time_ms: Joi.number().min(0).optional(),
+  model_version: Joi.string().optional(),
   tags: Joi.array().items(Joi.string().max(100)).max(20).optional(),
-  linked_entities: semanticSearchSchemas.linkedEntities.optional(),
-  feature_vector: semanticSearchSchemas.featureVector.optional(),
-  temporal_features: semanticSearchSchemas.temporalFeatures.optional(),
-  emotional_features: semanticSearchSchemas.emotionalFeatures.optional(),
-  semantic_features: semanticSearchSchemas.semanticFeatures.optional(),
-  user_features: semanticSearchSchemas.userFeatures.optional(),
-  search_metadata: semanticSearchSchemas.searchMetadata.optional()
-}).min(1);
+  emotion_context: Joi.object({
+    dominant_emotion: Joi.string().optional(),
+    intensity: Joi.number().min(0).max(1).optional(),
+    emotions: Joi.object({
+      joy: Joi.number().min(0).max(1).optional(),
+      sadness: Joi.number().min(0).max(1).optional(),
+      anger: Joi.number().min(0).max(1).optional(),
+      fear: Joi.number().min(0).max(1).optional(),
+      surprise: Joi.number().min(0).max(1).optional(),
+      disgust: Joi.number().min(0).max(1).optional(),
+      anticipation: Joi.number().min(0).max(1).optional(),
+      trust: Joi.number().min(0).max(1).optional()
+    }).optional()
+  }).optional(),
+  linked_entities: Joi.object({
+    people: Joi.array().items(Joi.string()).optional(),
+    locations: Joi.array().items(Joi.string()).optional(),
+    events: Joi.array().items(Joi.string()).optional(),
+    topics: Joi.array().items(Joi.string()).optional()
+  }).optional(),
+  temporal_context: Joi.object({
+    hour_of_day: Joi.number().integer().min(0).max(23).optional(),
+    day_of_week: Joi.number().integer().min(0).max(6).optional(),
+    is_weekend: Joi.boolean().optional()
+  }).optional(),
+  search_metadata: Joi.object({
+    boost_factor: Joi.number().min(0).optional(),
+    recency_weight: Joi.number().min(0).optional(),
+    user_preference_alignment: Joi.number().min(0).optional()
+  }).optional()
+});
 
 // Search query validation
 const searchQuerySchema = Joi.object({
   embedding: semanticSearchSchemas.primaryEmbedding,
   user_id: Joi.string().uuid().optional(),
-  content_type: Joi.array().items(
-    Joi.string().valid('journal_entry', 'event', 'person', 'location', 'topic')
-  ).optional(),
+  content_type: Joi.array().items(Joi.string()).optional(),
   tags: Joi.array().items(Joi.string()).optional(),
   limit: Joi.number().integer().min(1).max(100).default(10),
   similarity_threshold: Joi.number().min(0).max(1).default(0.7),
@@ -134,6 +248,16 @@ const searchQuerySchema = Joi.object({
 
 // ID validation
 const idSchema = Joi.string().uuid().required();
+
+// Params validation for routes with ID
+const paramsIdSchema = Joi.object({
+  id: Joi.string().uuid().required()
+});
+
+// Params validation for routes with userId
+const paramsUserIdSchema = Joi.object({
+  userId: Joi.string().uuid().required()
+});
 
 // Validation middleware factory
 const validate = (schema, property = 'body') => {
@@ -169,7 +293,10 @@ module.exports = {
   schemas: {
     createSemanticSearch: createSemanticSearchSchema,
     updateSemanticSearch: updateSemanticSearchSchema,
+    partialUpdateSemanticSearch: partialUpdateSemanticSearchSchema,
     searchQuery: searchQuerySchema,
-    id: idSchema
+    id: idSchema,
+    paramsId: paramsIdSchema,
+    paramsUserId: paramsUserIdSchema
   }
 };

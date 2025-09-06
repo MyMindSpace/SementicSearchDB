@@ -9,8 +9,56 @@ class SemanticSearchService {
   async initialize() {
     if (!this.collection) {
       this.collection = await astraClient.getCollection();
+      await this.ensureCollection();
     }
     return this.collection;
+  }
+
+  /**
+   * Ensure the semantic_search collection exists, create if it doesn't
+   */
+  async ensureCollection() {
+    try {
+      // Try to get collection info by attempting a simple find operation
+      await this.collection.findOne({}, { projection: { _id: 1 } });
+      console.log('✅ Collection semantic_search exists');
+    } catch (error) {
+      if (error.message.includes('not found') || error.message.includes('Collection') || 
+          error.message.includes('does not exist')) {
+        console.log('📝 Creating semantic_search collection...');
+        try {
+          // Get the database instance to create collection
+          const db = await astraClient.getDatabase();
+          
+          // Create collection with vector configuration
+          const newCollection = await db.createCollection('semantic_search', {
+            vector: {
+              dimension: parseInt(process.env.DEFAULT_VECTOR_DIMENSIONS) || 1536,
+              metric: 'cosine'
+            }
+          });
+          
+          console.log('✅ Collection semantic_search created successfully');
+          
+          // Update the collection reference
+          this.collection = newCollection;
+        } catch (createError) {
+          console.error('❌ Failed to create collection:', createError.message);
+          // If collection already exists, just get it
+          if (createError.message.includes('already exists')) {
+            console.log('📝 Collection already exists, getting reference...');
+            const db = await astraClient.getDatabase();
+            this.collection = await db.collection('semantic_search');
+            console.log('✅ Collection reference updated');
+          } else {
+            throw new Error(`Failed to create collection: ${createError.message}`);
+          }
+        }
+      } else {
+        console.error('❌ Error checking collection:', error.message);
+        throw error;
+      }
+    }
   }
 
   /**
@@ -22,9 +70,8 @@ class SemanticSearchService {
 
       const entry = {
         _id: uuidv4(),
-        ...entryData,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
+        ...entryData
+        // Note: created_at and updated_at are now required in the request body
       };
 
       // Insert using vector search capability
@@ -70,33 +117,48 @@ class SemanticSearchService {
   }
 
   /**
-   * Update semantic search entry
+   * Update semantic search entry - REPLACES the entire entry
    */
-  async updateEntry(id, updateData) {
+  async updateEntry(id, newEntryData) {
     try {
       await this.initialize();
 
-      const updateDoc = {
-        ...updateData,
-        updated_at: new Date().toISOString()
-      };
-
-      const result = await this.collection.findOneAndUpdate(
-        { _id: id },
-        { $set: updateDoc },
-        { returnDocument: 'after' }
-      );
-
-      if (!result) {
+      // First check if the entry exists
+      const existingEntry = await this.collection.findOne({ _id: id });
+      
+      if (!existingEntry) {
         return {
           success: false,
           error: 'Semantic search entry not found'
         };
       }
 
+      // Create completely new entry data, preserving only id and created_at
+      const replacementEntry = {
+        _id: id,  // Keep the same ID
+        ...newEntryData,  // All new data from the request (including updated_at)
+        created_at: existingEntry.created_at  // Preserve original creation time
+      };
+
+      // Replace the entire document
+      const result = await this.collection.replaceOne(
+        { _id: id },
+        replacementEntry
+      );
+
+      if (result.matchedCount === 0) {
+        return {
+          success: false,
+          error: 'Semantic search entry not found'
+        };
+      }
+
+      // Fetch and return the replaced document
+      const updatedEntry = await this.collection.findOne({ _id: id });
+
       return {
         success: true,
-        data: result
+        data: updatedEntry
       };
     } catch (error) {
       console.error('Error updating semantic search entry:', error);

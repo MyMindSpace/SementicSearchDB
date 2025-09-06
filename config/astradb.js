@@ -61,6 +61,13 @@ class AstraDBClient {
     return this.collection;
   }
 
+  async getDatabase() {
+    if (!this.isConnected) {
+      await this.connect();
+    }
+    return this.db;
+  }
+
   // Health check method
   async healthCheck() {
     try {

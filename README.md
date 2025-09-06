@@ -8,6 +8,8 @@ A specialized vector database service for semantic search operations in the MyMi
 - **Semantic Content Types**: journal_entry, event, person, location, topic
 - **Advanced Search**: Vector similarity search with boosting and filtering
 - **Comprehensive Metadata**: Linked entities, tags, and search optimization
+- **Auto-Collection Management**: Automatic collection creation with proper vector indexing
+- **Complete vs Partial Updates**: REST-compliant PUT (replacement) and PATCH (partial) operations
 - **Scalable Architecture**: Built on AstraDB with production-ready deployment
 
 ## Schema Overview
@@ -17,30 +19,52 @@ A specialized vector database service for semantic search operations in the MyMi
 ```json
 {
   "id": "uuid",
-  "user_id": "uuid", 
-  "content_type": "journal_entry | event | person | location | topic",
-  "title": "string",
-  "content": "text",
-  "primary_embedding": [768], // Main semantic embedding
-  "feature_vector": [90],     // Engineered features
-  "temporal_features": [25],  // Time-based features
-  "emotional_features": [20], // Emotion analysis
-  "semantic_features": [30],  // Semantic analysis
-  "user_features": [15],      // User-specific features
-  "tags": ["semantic", "tags"],
+  "user_id": "uuid (required)",
+  "entry_id": "uuid (required)", 
+  "content_type": "string (required, max 10000 chars)",
+  "message_type": "string (optional)",
+  "title": "string (required, max 1000 chars)",
+  "content": "string (required)",
+  "session_id": "uuid (required)",
+  "conversation_context": "string (optional, max 1000 chars)",
+  "primary_embedding": "[768] (required, 768-dimensional vector)",
+  "lightweight_embedding": "[384] (optional, 384-dimensional vector)",
+  "created_at": "string (required, ISO timestamp)",
+  "updated_at": "string (required, ISO timestamp)",
+  "text_length": "integer (optional, >= 0)",
+  "processing_time_ms": "number (optional, >= 0)",
+  "model_version": "string (optional)",
+  "tags": "array[string] (required, max 20 tags, each max 100 chars)",
+  "emotion_context": {
+    "dominant_emotion": "string (optional)",
+    "intensity": "number (optional, 0-1)",
+    "emotions": {
+      "joy": "number (optional, 0-1)",
+      "sadness": "number (optional, 0-1)",
+      "anger": "number (optional, 0-1)",
+      "fear": "number (optional, 0-1)",
+      "surprise": "number (optional, 0-1)",
+      "disgust": "number (optional, 0-1)",
+      "anticipation": "number (optional, 0-1)",
+      "trust": "number (optional, 0-1)"
+    }
+  },
   "linked_entities": {
-    "people": ["names"],
-    "locations": ["places"], 
-    "events": ["event_ids"],
-    "topics": ["topic_names"]
+    "people": "array[string] (required)",
+    "locations": "array[string] (required)",
+    "events": "array[string] (required)",
+    "topics": "array[string] (required)"
+  },
+  "temporal_context": {
+    "hour_of_day": "integer (optional, 0-23)",
+    "day_of_week": "integer (optional, 0-6)",
+    "is_weekend": "boolean (optional)"
   },
   "search_metadata": {
-    "boost_factor": 1.0,
-    "recency_weight": 0.5,
-    "user_preference_alignment": 0.5
-  },
-  "created_at": "datetime",
-  "updated_at": "datetime"
+    "boost_factor": "number (required when present, >= 0)",
+    "recency_weight": "number (required when present, >= 0)",
+    "user_preference_alignment": "number (required when present, >= 0)"
+  }
 }
 ```
 
@@ -50,7 +74,8 @@ A specialized vector database service for semantic search operations in the MyMi
 
 - `POST /api/semantic-search/entries` - Create new entry
 - `GET /api/semantic-search/entries/:id` - Get entry by ID
-- `PUT /api/semantic-search/entries/:id` - Update entry
+- `PUT /api/semantic-search/entries/:id` - **Complete replacement** of entry (requires all fields)
+- `PATCH /api/semantic-search/entries/:id` - ⚠️ **Not implemented** (returns 501)
 - `DELETE /api/semantic-search/entries/:id` - Delete entry
 
 ### Search Operations
@@ -109,18 +134,50 @@ NODE_ENV=development
 ```javascript
 const entryData = {
   user_id: "user-uuid",
+  entry_id: "entry-uuid",
   content_type: "journal_entry",
+  message_type: "user_message",
   title: "My Daily Reflection",
   content: "Today I learned about semantic search...",
-  primary_embedding: [...], // 768 dimensions
-  feature_vector: [...],    // 90 dimensions
-  temporal_features: [...], // 25 dimensions
-  emotional_features: [...], // 20 dimensions
-  semantic_features: [...], // 30 dimensions
-  user_features: [...],     // 15 dimensions
+  session_id: "session-uuid",
+  conversation_context: "User discussing learning experiences",
+  primary_embedding: [...], // 768 dimensions (required)
+  created_at: new Date().toISOString(),
+  updated_at: new Date().toISOString(),
+  lightweight_embedding: [...], // 384 dimensions (optional)
+  text_length: 45,
+  processing_time_ms: 125.5,
+  model_version: "semantic-v1",
   tags: ["learning", "reflection"],
+  emotion_context: {
+    dominant_emotion: "joy",
+    intensity: 0.8,
+    emotions: {
+      joy: 0.8,
+      sadness: 0.0,
+      anger: 0.0,
+      fear: 0.0,
+      surprise: 0.2,
+      disgust: 0.0,
+      anticipation: 0.0,
+      trust: 0.0
+    }
+  },
   linked_entities: {
+    people: [],
+    locations: [],
+    events: [],
     topics: ["semantic-search", "ai"]
+  },
+  temporal_context: {
+    hour_of_day: 14,
+    day_of_week: 1,
+    is_weekend: false
+  },
+  search_metadata: {
+    boost_factor: 1.0,
+    recency_weight: 0.5,
+    user_preference_alignment: 0.7
   }
 };
 
@@ -137,7 +194,8 @@ const response = await fetch('/api/semantic-search/entries', {
 const searchQuery = {
   embedding: [...], // 768 dimensions
   user_id: "user-uuid",
-  content_type: ["journal_entry", "topic"],
+  content_type: ["journal_entry", "topic"], // No longer restricted to predefined types
+  tags: ["learning", "reflection"],
   limit: 10,
   similarity_threshold: 0.8,
   boost_recent: true,
@@ -151,14 +209,59 @@ const results = await fetch('/api/semantic-search/search', {
 });
 ```
 
+### Complete Entry Replacement (PUT)
+
+PUT requests perform **complete replacement** of the entire entry. All fields must be provided:
+
+```javascript
+const completeEntry = {
+  user_id: "user-uuid",
+  content_type: "journal_entry",
+  title: "Updated Reflection",
+  content: "Completely new content...",
+  primary_embedding: [...], // 768 dimensions - REQUIRED
+  feature_vector: [...],    // 90 dimensions - REQUIRED
+  temporal_features: [...], // 25 dimensions - REQUIRED
+  emotional_features: [...], // 20 dimensions - REQUIRED
+  semantic_features: [...], // 30 dimensions - REQUIRED
+  user_features: [...],     // 15 dimensions - REQUIRED
+  tags: ["new", "tags"],
+  linked_entities: { /* complete new structure */ },
+  search_metadata: { /* complete new metadata */ }
+};
+
+// This will REPLACE the entire entry, preserving only _id and created_at
+const response = await fetch('/api/semantic-search/entries/entry-id', {
+  method: 'PUT',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify(completeEntry)
+});
+```
+
+### Partial Entry Update (PATCH)
+
+PATCH requests allow updating only specific fields:
+
+```javascript
+const partialUpdate = {
+  title: "Updated title only",
+  tags: ["updated", "tags"]
+  // Only changed fields need to be included
+};
+
+const response = await fetch('/api/semantic-search/entries/entry-id', {
+  method: 'PATCH',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify(partialUpdate)
+});
+```
+
 ## Vector Dimensions
 
-- **Primary Embedding (768D)**: Main semantic representation
-- **Feature Vector (90D)**: Engineered content features
-- **Temporal Features (25D)**: Time-based patterns
-- **Emotional Features (20D)**: Emotional analysis vectors
-- **Semantic Features (30D)**: Semantic relationship vectors
-- **User Features (15D)**: User-specific behavioral patterns
+- **Primary Embedding (768D)**: Main semantic representation (required)
+- **Lightweight Embedding (384D)**: Compact representation for faster operations (optional)
+
+**Note**: The previous feature vectors (feature_vector, temporal_features, etc.) have been removed from the schema. The service now focuses on the primary and lightweight embeddings with rich metadata support.
 
 ## Deployment
 
@@ -213,11 +316,17 @@ gcloud app deploy app.yaml
 
 ## Content Types
 
+The `content_type` field now accepts any string value, providing flexibility for different use cases:
+
 - **journal_entry**: Personal journal entries and reflections
-- **event**: Significant events and experiences
+- **event**: Significant events and experiences  
 - **person**: People and relationships
 - **location**: Places and geographical contexts
 - **topic**: Abstract topics and concepts
+- **chat_message**: Conversational messages
+- **custom_type**: Any custom content type as needed
+
+**Note**: Content types are no longer restricted to predefined values, allowing for extensible content categorization.
 
 ## Search Features
 

@@ -28,7 +28,7 @@ router.post('/entries', validate(schemas.createSemanticSearch), async (req, res,
  * @desc    Get semantic search entry by ID
  * @access  Public
  */
-router.get('/entries/:id', validate(schemas.id, 'params'), async (req, res, next) => {
+router.get('/entries/:id', validate(schemas.paramsId, 'params'), async (req, res, next) => {
   try {
     const result = await semanticSearchService.getEntryById(req.params.id);
     
@@ -52,11 +52,11 @@ router.get('/entries/:id', validate(schemas.id, 'params'), async (req, res, next
 
 /**
  * @route   PUT /api/semantic-search/entries/:id
- * @desc    Update semantic search entry
+ * @desc    Update semantic search entry (complete replacement)
  * @access  Public
  */
 router.put('/entries/:id', 
-  validate(schemas.id, 'params'),
+  validate(schemas.paramsId, 'params'),
   validate(schemas.updateSemanticSearch),
   async (req, res, next) => {
     try {
@@ -72,8 +72,30 @@ router.put('/entries/:id',
 
       res.json({
         success: true,
-        message: 'Semantic search entry updated successfully',
+        message: 'Semantic search entry replaced successfully',
         data: result.data,
+        timestamp: new Date().toISOString()
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+/**
+ * @route   PATCH /api/semantic-search/entries/:id
+ * @desc    Partially update semantic search entry
+ * @access  Public
+ */
+router.patch('/entries/:id', 
+  validate(schemas.paramsId, 'params'),
+  validate(schemas.partialUpdateSemanticSearch),
+  async (req, res, next) => {
+    try {
+      // For now, return not implemented since we only have complete replacement
+      return res.status(501).json({
+        success: false,
+        error: 'Partial updates (PATCH) not implemented. Use PUT for complete replacement.',
         timestamp: new Date().toISOString()
       });
     } catch (error) {
@@ -87,7 +109,7 @@ router.put('/entries/:id',
  * @desc    Delete semantic search entry
  * @access  Public
  */
-router.delete('/entries/:id', validate(schemas.id, 'params'), async (req, res, next) => {
+router.delete('/entries/:id', validate(schemas.paramsId, 'params'), async (req, res, next) => {
   try {
     const result = await semanticSearchService.deleteEntry(req.params.id);
     
@@ -133,7 +155,7 @@ router.post('/search', validate(schemas.searchQuery), async (req, res, next) => 
  * @desc    Get all entries for a specific user
  * @access  Public
  */
-router.get('/users/:userId/entries', validate(schemas.id, 'params'), async (req, res, next) => {
+router.get('/users/:userId/entries', validate(schemas.paramsUserId, 'params'), async (req, res, next) => {
   try {
     const options = {
       page: parseInt(req.query.page) || 1,
@@ -163,12 +185,13 @@ router.get('/users/:userId/entries', validate(schemas.id, 'params'), async (req,
 router.get('/content-types/:type/entries', async (req, res, next) => {
   try {
     const { type } = req.params;
-    const validTypes = ['journal_entry', 'event', 'person', 'location', 'topic'];
     
-    if (!validTypes.includes(type)) {
+    // No longer restricting to specific content types since schema allows any string
+    // Just validate that type is provided and not empty
+    if (!type || type.trim() === '') {
       return res.status(400).json({
         success: false,
-        error: `Invalid content type. Must be one of: ${validTypes.join(', ')}`,
+        error: 'Content type parameter is required and cannot be empty',
         timestamp: new Date().toISOString()
       });
     }

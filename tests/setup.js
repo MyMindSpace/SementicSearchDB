@@ -15,23 +15,48 @@ global.generateMockEmbedding = (dimensions) => {
 };
 
 global.generateMockSemanticEntry = () => {
+  const now = new Date().toISOString();
   return {
     user_id: 'test-user-uuid',
+    entry_id: 'test-entry-uuid',
     content_type: 'journal_entry',
+    message_type: 'user_message',
     title: 'Test Entry',
     content: 'This is a test semantic entry for testing purposes.',
+    session_id: 'test-session-uuid',
+    conversation_context: 'Test conversation context',
     primary_embedding: generateMockEmbedding(768),
-    feature_vector: generateMockEmbedding(90),
-    temporal_features: generateMockEmbedding(25),
-    emotional_features: generateMockEmbedding(20),
-    semantic_features: generateMockEmbedding(30),
-    user_features: generateMockEmbedding(15),
+    created_at: now,
+    updated_at: now,
+    lightweight_embedding: generateMockEmbedding(384),
+    text_length: 50,
+    processing_time_ms: 125.5,
+    model_version: 'test-model-v1',
     tags: ['test', 'semantic'],
+    emotion_context: {
+      dominant_emotion: 'joy',
+      intensity: 0.8,
+      emotions: {
+        joy: 0.8,
+        sadness: 0.1,
+        anger: 0.0,
+        fear: 0.1,
+        surprise: 0.0,
+        disgust: 0.0,
+        anticipation: 0.0,
+        trust: 0.0
+      }
+    },
     linked_entities: {
       people: ['Test Person'],
       locations: ['Test Location'],
-      events: [],
+      events: ['test-event-id'],
       topics: ['testing']
+    },
+    temporal_context: {
+      hour_of_day: 14,
+      day_of_week: 1,
+      is_weekend: false
     },
     search_metadata: {
       boost_factor: 1.0,
